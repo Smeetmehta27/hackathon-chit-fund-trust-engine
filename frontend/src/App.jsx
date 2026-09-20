@@ -190,6 +190,27 @@ function App() {
     setLoading(false);
   };
 
+  const logAnotherRound = () => {
+    setRoundNumber(prev => parseInt(prev, 10) + 1);
+    const initialPayments = {};
+    members.forEach(m => {
+      initialPayments[m.memberId] = { paid: false, amount: groupProfile.monthlyAmount, dueDate: Math.floor(Date.now() / 1000), paidDate: '' };
+    });
+    setRoundPayments(initialPayments);
+    setView('LOG_ROUND');
+  };
+
+  const startOver = () => {
+    setGroupId(null);
+    setGroupProfile(null);
+    setMembers([]);
+    setGroupName('');
+    setGroupAmount(1000);
+    setRoundNumber(1);
+    setDashboardData(null);
+    setView('CREATE_GROUP');
+  };
+
   // Helper for formatting currency
   const formatCurrency = (val) => {
     if (!val) return '₹0';
@@ -333,7 +354,9 @@ function App() {
         {view === 'DASHBOARD' && (
           <>
             <div className="topbar">
-              <div className="eyebrow">{groupProfile?.name} · {dashboardData?.profile?.totalRounds || 0} rounds logged</div>
+              <div className="eyebrow">
+                {groupProfile?.name} · {dashboardData?.profile?.totalRounds || 0} {(dashboardData?.profile?.totalRounds || 0) === 1 ? 'round logged' : 'rounds logged'}
+              </div>
               <h1>Who's solid.</h1>
             </div>
             
@@ -386,6 +409,10 @@ function App() {
                       </div>
                     )
                   })}
+                </div>
+                <div className="bottom-cta" style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                  <button onClick={logAnotherRound} className="btn btn-secondary">Log another round</button>
+                  <button onClick={startOver} className="btn btn-ghost">Switch groups</button>
                 </div>
               </>
             )}
