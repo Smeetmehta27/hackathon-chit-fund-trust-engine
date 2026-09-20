@@ -3,6 +3,60 @@ import './index.css'
 
 const API_BASE = "https://lm684rdz5h.execute-api.us-east-1.amazonaws.com/prod";
 
+function CountUp({ endValue, delayMs = 0, isHigh, isMid, isLow }) {
+  const [value, setValue] = useState(0);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mediaQuery.matches);
+    const listener = (e) => setPrefersReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', listener);
+    return () => mediaQuery.removeEventListener('change', listener);
+  }, []);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setValue(endValue);
+      return;
+    }
+    
+    let startTimestamp = null;
+    const duration = 500;
+    let animationFrame;
+    let timeout;
+    
+    const step = (timestamp) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      // easeOutQuart
+      const easeProgress = 1 - Math.pow(1 - progress, 4);
+      setValue(Math.floor(easeProgress * endValue));
+      if (progress < 1) {
+        animationFrame = window.requestAnimationFrame(step);
+      } else {
+        setValue(endValue);
+      }
+    };
+    
+    timeout = setTimeout(() => {
+      animationFrame = window.requestAnimationFrame(step);
+    }, delayMs);
+
+    return () => {
+      clearTimeout(timeout);
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+    };
+  }, [endValue, delayMs, prefersReducedMotion]);
+
+  let rankClass = "rank-score";
+  if (isHigh) rankClass += " high";
+  else if (isMid) rankClass += " mid";
+  else if (isLow) rankClass += " low";
+
+  return <div className={rankClass}>{value}%</div>;
+}
+
 function App() {
   const [view, setView] = useState('CREATE_GROUP'); // CREATE_GROUP, ADD_MEMBER, LOG_ROUND, DASHBOARD
   const [groupId, setGroupId] = useState(null);
@@ -32,13 +86,14 @@ function App() {
 
   const createGroup = async (e) => {
     e.preventDefault();
+    if (!groupName.trim()) return;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`${API_BASE}/groups`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: groupName, monthlyAmount: groupAmount })
+        body: JSON.stringify({ name: groupName, monthlyAmount: parseFloat(groupAmount) })
       });
       if (!res.ok) throw new Error('Failed to create group');
       const data = await res.json();
@@ -53,6 +108,7 @@ function App() {
 
   const addMember = async (e) => {
     e.preventDefault();
+    if (!memberName.trim()) return;
     setLoading(true);
     setError(null);
     try {
@@ -73,7 +129,6 @@ function App() {
   };
 
   const goToLogRounds = () => {
-    // Initialize payments state
     const initialPayments = {};
     members.forEach(m => {
       initialPayments[m.memberId] = { paid: false, amount: groupProfile.monthlyAmount, dueDate: Math.floor(Date.now() / 1000), paidDate: '' };
@@ -96,9 +151,7 @@ function App() {
     try {
       const payload = Object.entries(roundPayments).map(([memberId, data]) => {
         let paidDateVal = 0;
-        if (data.paid && data.paidDate) {
-          paidDateVal = Math.floor(new Date(data.paidDate).getTime() / 1000);
-        } else if (data.paid) {
+        if (data.paid) {
           paidDateVal = Math.floor(Date.now() / 1000);
         }
         return {
@@ -137,157 +190,208 @@ function App() {
     setLoading(false);
   };
 
+  // Helper for formatting currency
+  const formatCurrency = (val) => {
+    if (!val) return '₹0';
+    return '₹' + Number(val).toLocaleString('en-IN');
+  };
+
   return (
-    <div className="container">
-      <header>
-        <h1>Hackathon Fund Manager</h1>
-        {groupId && <p className="subtitle">Group ID: {groupId}</p>}
-      </header>
+    <div id="root">
+      <div className="screen">
+        <div className="status-bar"></div>
+        {error && <div className="error-banner">{error}</div>}
 
-      {error && <div className="error-banner">{error}</div>}
-
-      <main>
         {view === 'CREATE_GROUP' && (
-          <div className="card form-card">
-            <h2>Create New Group</h2>
-            <form onSubmit={createGroup}>
-              <div className="form-group">
-                <label>Group Name</label>
-                <input required value={groupName} onChange={e => setGroupName(e.target.value)} placeholder="e.g. Vacation Fund" />
-              </div>
-              <div className="form-group">
-                <label>Monthly Amount (₹)</label>
-                <input type="number" required value={groupAmount} onChange={e => setGroupAmount(e.target.value)} />
-              </div>
-              <button disabled={loading} type="submit" className="btn primary block">
-                {loading ? 'Creating...' : 'Create Group'}
+          <>
+            <div className="topbar">
+              <div className="eyebrow">step 1 of 3</div>
+              <h1>Start a group</h1>
+              <p>Give it a name your group will recognize.</p>
+            </div>
+            <div className="scroll-area">
+              <form id="create-group-form" className="form-stack" onSubmit={createGroup}>
+                <div className="field">
+                  <label>What's it called?</label>
+                  <input required value={groupName} onChange={e => setGroupName(e.target.value)} placeholder="e.g. Hackathon Fund" />
+                  <div className="helper">Only your group sees this.</div>
+                </div>
+                <div className="field">
+                  <label>How much, per person, per round?</label>
+                  <input type="number" required value={groupAmount} onChange={e => setGroupAmount(e.target.value)} />
+                </div>
+              </form>
+            </div>
+            <div className="bottom-cta">
+              <button disabled={loading} form="create-group-form" type="submit" className="btn btn-primary">
+                {loading ? 'Creating...' : 'Continue'}
               </button>
-            </form>
-          </div>
+            </div>
+          </>
         )}
 
         {view === 'ADD_MEMBER' && (
-          <div className="card form-card">
-            <h2>Add Members</h2>
-            <p>Group: <strong>{groupProfile?.name}</strong></p>
-            
-            <form onSubmit={addMember} className="inline-form">
-              <input required value={memberName} onChange={e => setMemberName(e.target.value)} placeholder="Member Name" />
-              <input value={memberPhone} onChange={e => setMemberPhone(e.target.value)} placeholder="Phone or UPI" />
-              <button disabled={loading} type="submit" className="btn secondary">Add</button>
-            </form>
-
-            <div className="members-list">
-              <h3>Current Members ({members.length})</h3>
-              <ul>
-                {members.map(m => <li key={m.memberId}>{m.name}</li>)}
-                {members.length === 0 && <li className="empty">No members added yet</li>}
-              </ul>
+          <>
+            <div className="topbar">
+              <div className="eyebrow">step 2 of 3 · {groupProfile?.name}</div>
+              <h1>Who's in?</h1>
+              <p>Add everyone before logging the first round.</p>
             </div>
-
-            <div className="actions">
-              <button disabled={members.length === 0} onClick={goToLogRounds} className="btn primary block">Proceed to Log Rounds</button>
+            <div className="scroll-area">
+              {members.map(m => (
+                <div key={m.memberId} className="member-pill">
+                  <div className="who">
+                    <div className="avatar">{m.name.charAt(0).toUpperCase()}</div>
+                    <div>
+                      <div className="name">{m.name}</div>
+                      {m.phoneUpi && <div className="sub">{m.phoneUpi}</div>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              <form onSubmit={addMember} className="form-stack" style={{marginTop: '8px'}}>
+                <div className="field">
+                  <label>Add another</label>
+                  <input required value={memberName} onChange={e => setMemberName(e.target.value)} placeholder="Name" />
+                </div>
+                <div className="field">
+                  <input value={memberPhone} onChange={e => setMemberPhone(e.target.value)} placeholder="UPI ID or phone" />
+                </div>
+                <button disabled={loading} type="submit" className="btn btn-secondary">+ Add member</button>
+              </form>
             </div>
-          </div>
+            <div className="bottom-cta">
+              <button disabled={members.length < 2} onClick={goToLogRounds} className="btn btn-primary">
+                Done adding — log a round
+              </button>
+            </div>
+          </>
         )}
 
         {view === 'LOG_ROUND' && (
-          <div className="card form-card log-round-card">
-            <h2>Log Payment Round</h2>
-            <div className="form-group">
-              <label>Round Number</label>
-              <input type="number" min="1" value={roundNumber} onChange={e => setRoundNumber(e.target.value)} />
+          <>
+            <div className="topbar">
+              <div className="eyebrow">{groupProfile?.name}</div>
+              <h1>Round {roundNumber}</h1>
+              <p>Mark who paid. Everyone else counts as missed.</p>
             </div>
+            <div className="scroll-area">
+              <div className="form-stack" style={{marginBottom: '16px'}}>
+                <div className="field">
+                  <label>Round Number</label>
+                  <input type="number" min="1" value={roundNumber} onChange={e => setRoundNumber(e.target.value)} />
+                </div>
+              </div>
 
-            <form onSubmit={logRound}>
-              <div className="payments-grid">
-                {members.map(m => {
-                  const data = roundPayments[m.memberId] || {};
-                  return (
-                    <div key={m.memberId} className="payment-row card">
-                      <div className="payment-info">
-                        <strong>{m.name}</strong>
-                      </div>
-                      <div className="payment-inputs">
-                        <label className="checkbox-label">
-                          <input type="checkbox" checked={data.paid || false} onChange={e => updatePayment(m.memberId, 'paid', e.target.checked)} />
-                          Paid
-                        </label>
-                        <input type="number" value={data.amount || ''} onChange={e => updatePayment(m.memberId, 'amount', e.target.value)} placeholder="Amount" />
-                        {data.paid && (
-                          <input type="date" value={data.paidDate || ''} onChange={e => updatePayment(m.memberId, 'paidDate', e.target.value)} title="Paid Date" />
-                        )}
+              {members.map(m => {
+                const data = roundPayments[m.memberId] || {};
+                const isPaid = data.paid || false;
+                return (
+                  <div key={m.memberId} className="round-member-row">
+                    <div>
+                      <div className="name" style={{color: 'var(--ink-high)', fontWeight: '600', fontSize: '14px'}}>
+                        {m.name}
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-              <button disabled={loading} type="submit" className="btn primary block submit-round">
-                {loading ? 'Logging...' : 'Submit Round'}
+                    <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                      <input 
+                        type="number" 
+                        className="amount-input" 
+                        value={data.amount || ''} 
+                        onChange={e => updatePayment(m.memberId, 'amount', e.target.value)} 
+                      />
+                      <div className="toggle">
+                        <button 
+                          type="button"
+                          className={isPaid ? "active-paid" : ""} 
+                          onClick={() => updatePayment(m.memberId, 'paid', true)}
+                        >
+                          Paid
+                        </button>
+                        <button 
+                          type="button"
+                          className={!isPaid ? "active-unpaid" : ""} 
+                          onClick={() => updatePayment(m.memberId, 'paid', false)}
+                        >
+                          Not yet
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="bottom-cta">
+              <button disabled={loading} onClick={logRound} className="btn btn-primary">
+                {loading ? 'Logging...' : 'Submit round'}
               </button>
-            </form>
-          </div>
+            </div>
+          </>
         )}
 
         {view === 'DASHBOARD' && (
-          <div className="dashboard">
-            <div className="dashboard-header">
-              <h2>Group Dashboard</h2>
-              <button onClick={loadDashboard} className="btn secondary small">Refresh</button>
+          <>
+            <div className="topbar">
+              <div className="eyebrow">{groupProfile?.name} · {dashboardData?.profile?.totalRounds || 0} rounds logged</div>
+              <h1>Who's solid.</h1>
             </div>
             
-            {loading && !dashboardData && <p className="loading">Loading dashboard data...</p>}
+            {loading && !dashboardData && <p className="loading">Loading dashboard...</p>}
             
             {dashboardData && (
-              <div className="dashboard-content">
-                <div className="stats-cards">
-                  <div className="stat-card">
-                    <h4>Total Rounds</h4>
-                    <p>{dashboardData.profile.totalRounds}</p>
+              <>
+                <div className="stat-strip">
+                  <div className="stat-tile">
+                    <div className="num">{formatCurrency((dashboardData.profile.totalRounds || 0) * (dashboardData.profile.memberCount || 0) * (dashboardData.profile.monthlyAmount || 0))}</div>
+                    <div className="lbl">collected so far</div>
                   </div>
-                  <div className="stat-card">
-                    <h4>Monthly Amount</h4>
-                    <p>₹{dashboardData.profile.monthlyAmount}</p>
+                  <div className="stat-tile">
+                    <div className="num">{dashboardData.profile.memberCount}</div>
+                    <div className="lbl">members</div>
                   </div>
-                  <div className="stat-card">
-                    <h4>Members</h4>
-                    <p>{dashboardData.profile.memberCount}</p>
+                  <div className="stat-tile">
+                    <div className="num">{dashboardData.profile.totalRounds}</div>
+                    <div className="lbl">rounds done</div>
                   </div>
                 </div>
 
-                <h3>Trust Rankings</h3>
-                <div className="rankings-list">
+                <div className="scroll-area">
                   {dashboardData.payoutOrder.map((m, index) => {
                     const trustScore = parseFloat(m.trustScore || 0);
-                    const isHighTrust = trustScore >= 0.7;
-                    const isLowTrust = trustScore <= 0.4;
-                    let trustClass = "trust-medium";
-                    if (isHighTrust) trustClass = "trust-high";
-                    if (isLowTrust) trustClass = "trust-low";
+                    const isHigh = trustScore >= 0.7;
+                    const isLow = trustScore <= 0.4;
+                    const isMid = !isHigh && !isLow;
+                    
+                    let cardClass = "rank-card";
+                    if (isMid) cardClass += " mid";
+                    if (isLow) cardClass += " low";
 
                     return (
-                      <div key={m.PK} className={`member-card ${trustClass}`}>
-                        <div className="member-header">
-                          <div className="member-identity">
-                            <span className="rank">#{index + 1}</span>
-                            <span className="name">{m.name}</span>
+                      <div key={m.PK} className={cardClass}>
+                        <div className="rank-top">
+                          <div className="rank-name">
+                            <span className="pos">#{index + 1}</span>
+                            <span className="who">{m.name}</span>
                           </div>
-                          <div className="score-badge">
-                            {Math.round(trustScore * 100)}% Trust
-                          </div>
+                          <CountUp 
+                            endValue={Math.round(trustScore * 100)} 
+                            delayMs={index * 80}
+                            isHigh={isHigh}
+                            isMid={isMid}
+                            isLow={isLow}
+                          />
                         </div>
-                        <div className="member-explanation">
-                          <p>{m.explanation}</p>
-                        </div>
+                        <div className="rank-explain">{m.explanation}</div>
                       </div>
                     )
                   })}
                 </div>
-              </div>
+              </>
             )}
-          </div>
+          </>
         )}
-      </main>
+      </div>
     </div>
   )
 }
