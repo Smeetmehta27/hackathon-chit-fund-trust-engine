@@ -234,7 +234,9 @@ def lambda_handler(event, context):
     try:
         http = event.get('requestContext', {}).get('http', {})
         method = http.get('method', '')
-        path = http.get('path', '')
+        
+        # Use proxy path parameter to avoid stage prefix issues
+        path = event.get('pathParameters', {}).get('proxy', '')
         
         path_parts = [p for p in path.split('/') if p]
         
