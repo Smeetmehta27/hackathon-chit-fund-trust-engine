@@ -145,7 +145,7 @@ def get_bedrock_explanation(member_id, score, name):
     try:
         # Using Converse API (supported in recent boto3)
         res = bedrock.converse(
-            modelId="meta.llama3-1-8b-instruct-v1:0",
+            modelId="us.meta.llama3-1-8b-instruct-v1:0",
             messages=[{"role": "user", "content": [{"text": prompt}]}],
             inferenceConfig={"maxTokens": 150, "temperature": 0.5}
         )
@@ -161,7 +161,7 @@ def get_bedrock_explanation(member_id, score, name):
                 "temperature": 0.5
             }
             res = bedrock.invoke_model(
-                modelId="meta.llama3-1-8b-instruct-v1:0",
+                modelId="us.meta.llama3-1-8b-instruct-v1:0",
                 contentType="application/json",
                 accept="application/json",
                 body=json.dumps(payload)
