@@ -106,9 +106,9 @@ def compute_risk_score(member, payments):
     for p in payments:
         if p.get('paid'):
             paid_count += 1
-            due = p.get('dueDate', 0)
-            paid_date = p.get('paidDate', 0)
-            days_late = max(0, (paid_date - due) / 86400)
+            due = float(p.get('dueDate', 0))
+            paid_date = float(p.get('paidDate', 0))
+            days_late = max(0.0, (paid_date - due) / 86400.0)
             total_days_late += days_late
             if days_late == 0:
                 on_time_count += 1
