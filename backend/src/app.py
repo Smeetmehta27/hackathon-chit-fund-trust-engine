@@ -94,7 +94,7 @@ def log_round(event, group_id, round_number):
     
     return respond(200, {'message': f'Round {round_number} logged successfully'})
 
-def compute_risk_score(member, payments):
+def compute_trust_score(member, payments):
     # Features: % paid on time, avg days late, consistency
     if not payments:
         return 0.5 # Default middle score if no history
@@ -137,8 +137,8 @@ def get_bedrock_explanation(member_id, score, name):
         
     # Cache miss, call Bedrock
     prompt = f"""
-    You are a financial advisor explaining a risk score to a chit-fund/ROSCAS group.
-    Member '{name}' has a computed risk score of {score} (0 is very high risk, 1 is very low risk/reliable).
+    You are a financial advisor explaining a trust score to a chit-fund/ROSCAS group.
+    Member '{name}' has a computed trust score of {score} (0 is very low trust/high risk, 1 is very high trust/reliable).
     Explain this score in 2 short sentences. Be direct.
     """
     
@@ -151,7 +151,8 @@ def get_bedrock_explanation(member_id, score, name):
         )
         explanation = res['output']['message']['content'][0]['text'].strip()
     except Exception as e:
-        print(f"Bedrock error: {e}")
+        e1 = str(e)
+        print(f"Bedrock error: {e1}")
         try:
             # Fallback to invoke_model for Llama 3
             payload = {
@@ -169,7 +170,7 @@ def get_bedrock_explanation(member_id, score, name):
             explanation = response_body.get('generation', '').strip()
         except Exception as e2:
             print(f"Fallback Bedrock error: {e2}")
-            explanation = f"AI Error: Could not generate explanation for score {score}."
+            explanation = f"AI Error (Converse: {e1} | Invoke: {str(e2)}) (Score: {score})"
             
     # Save to cache
     try:
@@ -216,14 +217,14 @@ def get_dashboard(event, group_id):
     dashboard_members = []
     
     for mid, m in members.items():
-        score = compute_risk_score(m['data'], m['payments'])
-        m['data']['riskScore'] = score
+        score = compute_trust_score(m['data'], m['payments'])
+        m['data']['trustScore'] = score
         # Call bedrock
         m['data']['explanation'] = get_bedrock_explanation(mid, score, m['data']['name'])
         dashboard_members.append(m['data'])
         
-    # Sort members: low risk (score closer to 1.0) first
-    dashboard_members.sort(key=lambda x: x['riskScore'], reverse=True)
+    # Sort members: high trust (score closer to 1.0) first
+    dashboard_members.sort(key=lambda x: x['trustScore'], reverse=True)
     
     return respond(200, {
         'profile': profile,
