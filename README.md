@@ -52,7 +52,7 @@ The core quantitative metric is a logistic regression model trained to predict m
 2. **Average Days Late**: Measure of delay for missed or late payments.
 3. **Consistency**: Variance in payment behavior.
 
-These features are passed through pre-computed weights (extracted from a separately trained sci-kit learn model) to yield a trust score bounded between 0.0 and 1.0.
+These features are passed through pre-computed weights (extracted from a separately trained scikit-learn model) to yield a trust score bounded between 0.0 and 1.0.
 
 ### Generative Explanations
 To translate raw numerical scores into actionable insights, the system invokes Amazon Bedrock using the `us.meta.llama3-1-8b-instruct-v1:0` model via cross-region inference profiles. It provides the model with the member's name and trust score, prompting it to generate a brief, financial-advisor-style explanation (e.g., "Highly reliable with consistent on-time payments"). To optimize latency and reduce costs, Bedrock responses are cached in DynamoDB.
@@ -72,8 +72,11 @@ To translate raw numerical scores into actionable insights, the system invokes A
 - Node.js and npm (for frontend)
 - Python 3.11+
 - AWS CLI and AWS SAM CLI (for backend deployment)
+- AWS Account with Amazon Bedrock model access enabled for Llama 3.1 8B in the deployment region
 
 ### Running the Frontend
+The frontend requires the API Gateway base URL to communicate with the backend. This is currently hardcoded via the `API_BASE` constant at the top of `frontend/src/App.jsx`. Update this URL with your deployed API Gateway endpoint before running locally or deploying.
+
 Navigate to the frontend directory, install dependencies, and start the Vite development server:
 ```bash
 cd frontend
@@ -93,19 +96,26 @@ sam deploy --guided
 The Lambda function expects the following environment variable to be configured (handled automatically by the SAM template):
 - `TABLE_NAME`: The name of the DynamoDB table.
 
+The frontend uses the following hardcoded constant (which acts as a client-side environment configuration):
+- `API_BASE`: The API Gateway HTTP API endpoint.
+
 ## Project Structure
 
 ```
 .
+├── .gitignore                # Root gitignore
 ├── backend/
 │   ├── src/
-│   │   └── app.py            # Mono-Lambda routing and business logic
+│   │   ├── app.py            # Mono-Lambda routing and business logic
+│   │   ├── constants.py      # Logistic regression weights
+│   │   └── train.py          # Synthetic data and model training script
 │   └── template.yaml         # AWS SAM CloudFormation template
 ├── frontend/
 │   ├── src/
 │   │   ├── App.jsx           # React UI and API state machine
 │   │   ├── index.css         # Custom CSS Design System
 │   │   └── main.jsx          # React entry point
+│   ├── zip_for_amplify.py    # Custom build zipping script for Amplify
 │   ├── package.json
 │   └── vite.config.js
 ├── screenshots/              # UI captures
