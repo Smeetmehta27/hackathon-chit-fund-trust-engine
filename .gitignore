@@ -1,0 +1,19 @@
+node_modules/
+dist/
+dist.zip
+.env
+__pycache__/
+*.zip
+*.pyc
+*.log
+# Exclude random scratch scripts generated during this session
+deploy_backend.py
+gen_script.py
+gen_update.py
+mcp_update.py
+merge.py
+run_cfn.py
+take_screenshots.py
+zip_list.py
+*.txt
+DESIGN.html
